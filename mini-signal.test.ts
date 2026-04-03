@@ -1,4 +1,4 @@
-import { signal, computed, effect } from './project6-yaroslav'
+import { signal, computed, effect } from './mini-signal'
 
 function assert(condition: boolean, message: string): void {
   if (!condition) {

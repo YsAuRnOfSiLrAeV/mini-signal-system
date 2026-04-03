@@ -13,7 +13,7 @@ type ReactiveSubscriber = {
   run: () => void
 }
 
-let currentSubscriber: ReactiveSubscriber | null = null
+let currentReactiveSubscriber: ReactiveSubscriber | null = null
 
 function clearSubscriptions(subscriber: ReactiveSubscriber): void {
   for (const subscribersSet of subscriber.subscriptions) {
@@ -22,10 +22,10 @@ function clearSubscriptions(subscriber: ReactiveSubscriber): void {
   subscriber.subscriptions.clear()
 }
 
-function collectDependency(subscribersSet: SubscribersSet): void {
-  if (!currentSubscriber) return
-  subscribersSet.add(currentSubscriber)
-  currentSubscriber.subscriptions.add(subscribersSet)
+function updateSubscribers(signalSubscribers: SubscribersSet): void {
+  if (!currentReactiveSubscriber) return
+  signalSubscribers.add(currentReactiveSubscriber)
+  currentReactiveSubscriber.subscriptions.add(signalSubscribers)
 }
 
 function notifySubscribers(subscribersSet: SubscribersSet): void {
@@ -39,12 +39,12 @@ function createReactiveSubscriber(fn: () => void): ReactiveSubscriber {
     subscriptions: new Set(),
     run: () => {
       clearSubscriptions(subscriber)
-      const previousSubscriber = currentSubscriber
-      currentSubscriber = subscriber
+      const previousSubscriber = currentReactiveSubscriber
+      currentReactiveSubscriber = subscriber
       try {
         fn()
       } finally {
-        currentSubscriber = previousSubscriber
+        currentReactiveSubscriber = previousSubscriber
       }
     }
   }
@@ -58,7 +58,7 @@ export function signal<T>(initial: T): Writable<T> {
 
   return {
     get value(): T {
-      collectDependency(subscribers)
+      updateSubscribers(subscribers)
       return currentValue
     },
 
@@ -77,24 +77,20 @@ export function effect(fn: () => void): void {
 
 export function computed<T>(fn: () => T): Readable<T> {
   let currentValue!: T
-  let hasValue = false
   const subscribers: SubscribersSet = new Set()
 
   const subscriber = createReactiveSubscriber(() => {
-    const nextValue = fn()
-
-    if (!hasValue || !Object.is(currentValue, nextValue)) {
-      currentValue = nextValue
-      hasValue = true
-      notifySubscribers(subscribers)
-    }
+    let nextValue = fn()
+    if (Object.is(nextValue, currentValue)) return
+    currentValue = nextValue
+    notifySubscribers(subscribers)
   })
 
   subscriber.run()
 
   return {
-    get value(): T {
-      collectDependency(subscribers)
+    get value() {
+      updateSubscribers(subscribers)
       return currentValue
     }
   }
